@@ -1,0 +1,920 @@
+Cluster k8s 
+-----------
+Ensemble de machines(Node) sur lesquels les application seront déployés, 
+Nodde Master(gestion du clustre/ garant l'état du cluster) et worker(tourner les applications)
+un Master expose API serveur point d'entrée du cluster
+
+
+Pods
+-----
+La plus petite unité applicative qui tourne sur cluster
+Un ensemble de container qui partage une stack réseau et du stockage
+Les Pods sont contenu dans des Nodes
+Le nombre de réplica d'un Pods c'est le nombre d'instance de ce Pods sur le cluster
+c'est un service meier ou technique d'une applicaion
+
+contain one or multiple container and volumes
+a container is refer as Pod
+each node is managed by master
+a node can have multiple pods
+
+Tous les containers d'un pod ont la même adresse ip
+
+
+Pods
+-----
+kubectl : binaire utilisé pour communiquer avec k8s par envoie requette https API server
+
+alias k=kubectl
+
+kubectl run --help
+kubectl run  mywebserver --image=nginx => pod/mywebserver created
+kubectl run pod-1 --image=nginx:alpine  --dry-run=client -o yaml > xxx.yaml
+kubectl run pod-1 --image=nginx --replicas=5 (5 pods)
+kubectl run messaging --image=redis:alpine --labels="tier:msg,env=prod"
+kubectl run messaging --image=redis:alpine -n finance
+kubectl run www --image=nginx:1.16-alpine --restart=Never/Always
+kubectl run busybox --image=busybox --dry-run=client -o yaml  --command -- sleep 1000 > busybox.yaml
+
+kubectl run  nginx--image=nginx
+kubectl run  nginx--image=nginx --port=80 (exposition du port 80)
+
+
+kubectl get pods
+kubectl get pods -o wide
+kubectl get pod wwww -o yaml > newpod.yaml
+kubectl get pod wwww -o json
+kubectl get pods --watch ou -w
+kubectl get pod -n finance
+kubectl get all -n finance
+
+kubectl get pods
+kubectl get all (list all objects)
+kubectl get pods -o wide
+kubectl get pods -l env=dev
+kubectl get pods --selector env=dev
+kubectl get pods --selector env=dev --no-headers | wc -l
+kubectl get all --selector env=dev,bu=finance,tier=frontend
+kubectl get pods --show-labels
+kubectl  get pods --all-namespaces
+kubectl  get pods -A
+kubectl  get pods all --all-namespaces -o yaml
+
+k get pods -o custom-colums 'NAME:metadata.name, Images:spec.containers[*].image'
+
+
+kubectl describe po/wwww
+kubectl describe pod POD_NAME ou po/POD_NAME
+
+
+kubectl  edit pod finance
+kubectl replace --force -f vvv.yaml
+
+kubectl  delete pod POD_NAME 
+kubectl  delete pod nginx
+kubectl  delete pod --all 
+
+
+kubectl exec -it mywebserver --bash
+kubectl delete pod mywebserver
+
+
+
+Labels & selectors:
+-----------
+kubectl label --help
+kubectl label pods pod-1 env=dev
+kubectl label --all env=dev
+kubectl label pods pod-1 env- (supprimer label)
+
+kubectl label node node1 disk=ssd
+kubectl label node node2 disk=hdd
+
+kubectl label namespace external role=app
+kubectl describe namespace external 
+
+
+kubectl get pods/nodes --show-labels
+
+kubectl get pods -l env=dev (pods avec un label env=dev)
+kubectl get pods --selector env=dev
+kubectl get pods -l env!=dev
+
+
+
+
+lancement Pods déclarative:
+----------------
+kubectl create -f POD_SPECIFICATION.yaml
+kubectl apply -f newpod.yaml
+kubectl delete -f newpod.yaml
+kubectl replace --force -f vvv.yaml
+
+
+proxy:
+-------
+kubectl proxy --port 8080
+localhost:8080
+
+
+Logs du Pod
+-------------
+kubectl logs POD_NAME [-c CONTAINER_NAME]
+kubectl logs orange
+kubectl logs orange -f
+kubectl logs orange -f --previous
+
+
+lancer une commande dans le pod
+-------------------------------
+kubectl exec -it POD_NAME [-c CONTAINER_NAME] --COMMAND
+kubectl exec -it nginxwebser -c container2 sh
+kubectl exec -it testpod bash
+kubectl exec -it testpod curl localhost
+kubectl exec www -- /bin/bash
+kubectl exec -it www -- whoami
+kubectl exec -it www --container api -- sh
+kubectl exec -it www -n external -- ping 192.168.13.4 
+kubectl exec webapp -- cat /log/app.log
+
+kubectl exec busybox -- nslookpup nginx-resolver-service
+
+kubectl run test-nslookup --image=busybox:1.28 --rm -it --restart=Never -- nslookup nginx-resolver-service
+kubectl run test-nslookup --image=busybox:1.28 --rm -it --restart=Never -- nslookup nginx-resolver-service > /root/CKA/nginx.svc
+
+kubectl get pod nginx-resolver -o wide
+kubectl run test-nslookup --image=busybox:1.28 --rm -it --restart=Never -- nslookup <P-O-D-I-P.default.pod> > /root/CKA/nginx.pod
+
+
+apt-get update && apt-get install/remove net-tools
+netstat -ntlp
+ifconfig
+wget 127.0.0.1:80
+
+
+Publier le port d'un pod sur la machine de hote
+-----------------------------------------------
+kubectl  port-forward POD_NAME/SRVICE_NAME HOST_PORT:CONTAINER_PORT
+kubectl  port-forward www 8080:80
+
+
+Nodes :
+--------------
+kubectl get nodes
+kubectl get nodes -o wide
+kubectl get nodes -o json
+
+kubectl get node/node1 -o yaml
+
+
+kubectl get node/node1 --kubeconfig /root/cka/super.config
+
+kubectl label nodes nodes1 disktype=ssd
+
+kubectl describe node node1 (voir les labels, taints, ..)
+
+kubectl  drain node1 (run on the controleplane)
+kubectl  drain node1 --force
+kubectl  drain node1 --ignore-daemondsets --delete-local-data
+kubectl  uncordon node1 -> bring node back online 
+
+kubectl  cordon node1 -> mark the node as unschedulable
+
+nodeSelector
+------------
+dans le pod rajouter: 
+nodeSelector:
+  disktype:ssd
+
+nodeAffinity:
+--------------
+opérateurs: In,NotIn,Exists,DoesNotExist, Gt, Lt
+
+
+podAffinity/podAntiAffinity: scheduler des pods en fonction des labels présents sur d'autres pods
+---------------------------
+hostname, region, az,..
+
+
+Taint et tolération
+---------------------
+ajouter la tainte dans un node
+aouter une tolération dans le pod
+
+kubectl  taint node node1 key=value:NoSchedule
+kubectl  taint node node1 key=value:NoSchedule- (supprimer la taint)
+kubectl  taint node node1 spray=mortein:NoSchedule
+
+kubectl describe node | grep Taints
+kubectl describe node node1 | grep Taint
+
+
+logs & event
+-----
+k get evetns -o wide
+k logs web 
+k logs web -f 
+k logs web --previous
+
+namespace : 
+---------
+
+segmenter un cluster en isolant des ressources (pod,svc,deploy)
+
+default, kube-public, kube-system
+
+kubectl get namespaces
+
+kubectl create namespace dev
+kubectl delete namespace/dev
+kubectl get ns
+kubectl get pod -n kube-system (pod qui tourne sur process system)
+kubectl get pods --namespace dev
+kubectl get pod -n dev
+
+kubectl create -f dev.yaml
+
+kubectl run www --image=nginx:alpine --namespace=dev
+
+
+CONTEXT & KUBECONFIG
+--------
+
+$(HOME)/.kube/config = /root/.kube/config
+$KUBECONFIG
+
+kubectl config current-context
+kubectl config set-context $(kubectl config current-context) --namespace=dev
+
+kubectl config view
+
+kubectl config --kubeconfig=base-config view
+kubectl config --kubeconfig=base-config get-contexts
+kubectl config --kubeconfig=base-config use-context dev-frontend (switch of specific context)
+
+kubectl config use-context research --kubeconfig /root/my-kube-config
+
+make the file as default kubeconfig
+mv /roo/my-kube-config /root/.kube/config
+
+shh node1
+
+ETCDCTL_API=3
+
+scp cluster1-controleplane:/opt/cluster1.de /opt
+
+kubectl config --help
+
+
+Create KubeConfig from scratch
+
+1. Add cluster details.
+kubectl config --kubeconfig=base-config set-cluster development --server=https://1.2.3.4
+
+
+2. Add user details
+kubectl config --kubeconfig=base-config set-credentials experimenter --username=dev --password=some-password
+
+
+
+3. Setting Contexts
+kubectl config --kubeconfig=base-config set-context dev-frontend --cluster=development --namespace=frontend --user=experimenter
+
+
+4. Repeating above steps for second cluster
+
+kubectl config --kubeconfig=base-config set-cluster production --server=https://4.5.6.7
+
+kubectl config --kubeconfig=base-config set-context prod-frontend --cluster=production --namespace=frontend --user=experimenter
+
+
+Next Steps:
+1. View Kubeconfig
+kubectl config --kubeconfig=base-config view
+
+2. Get current context information:
+kubectl config --kubeconfig=base-config get-contexts
+
+3. Switch Conexts, use specific context:
+kubectl config --kubeconfig=base-config use-context dev-frontend
+
+
+
+
+
+Service: 
+--------
+Gateway that distribute incoming traffic to the endpoint
+
+Regroupement de Pods similaires
+Elle va définir des règles au niveau réseau pour accéder à des Pods et faire de la répartition de charge
+
+Permet d'exposer des Pods de façon à les rendre visible depuis l'intérieur ou l'xtérieur du cluster
+Permet exposé les pods à l'intérieur ou à l'extérieur du cluster
+
+NodePort : to connect to outside of cluster -> internet
+ClusterIp : default, connect inside of cluster
+LoadBalasncer
+ExternalName
+
+creation service
+
+kubectl  create service nodeport whoami --tcp 8080:80 --dry-run=client -o yaml (service ecoute sur 8080 et redirection 80 des pods)
+kubectl create service clusterip redis --tcp=6379:6379 --dry-run=client -o yaml
+kubectl create service nodeport nginx --tcp=80:80 --node-port=30080 --dry-run=client -o yaml
+
+kubectl  expose --help
+kubectl expose pod redis --port=6379 --name redis-service --dry-run=client -o yaml
+kubectl expose pod nginx --type=NodePort --port=80 --name=nginx-service --dry-run=client -o yaml
+kubectl  expose pod messaging --name=messaging-service --port=80 --target-port=8080 
+kubectl  expose pod messaging --name=messaging-service --port=80 --target-port=8080 --type=NodePort --dry-run=client -o yaml
+kubectl  expose deployment messaging-deployment --name=messaging-service --type=NodePort --port=80 (port du service) --target-port=8080 (port du pod)
+
+kubectl run nginx --image=nginx  --port=80
+kubectl  expose pod nginx --name=messaging-service --port=80 --target-port=http --type=NodePort
+
+creation pod+service 
+kubectl run db --image=mongo:4.2 --port=27017 --expose --dry-run=client -o yaml 
+
+
+kubectl  get service
+kubectl  get svc
+kubectl  get svc/whoami 
+kubectl  describe svc messaging-service (check labels, endpoints)
+kubectl  edit svc messaging-service
+kubectl  delete svc messaging-service
+
+kubectl get endpoints
+
+
+kubectl run front-pod --image=ubuntu --command --sleep 3600
+kubectl run backend-pod-1 --image=nginx 
+kubectl run backend-pod-2 --image=nginx 
+
+kubectl apply -f  service.yaml
+kubectl describe service testservice
+
+we need to connect endpoints to a service:
+kubectl  get endpoints
+kubectl describe endpoints nameEndpoints
+
+
+ReplicatSet: manage and scaling pods
+--------------
+maintain a stable set of replica pods
+
+kubectl apply -f  replicaset.yaml
+
+kubectl  get replicatset
+kubectl  get rs
+kubectl  delete rs yyy-replicaset
+
+
+
+Deployment : 
+------------
+
+manage replicatset and pods, create new replicat set, handle rollout,
+
+Permet de gérér un ensemble de Pods identiques, les créer et les mette à jours
+
+kubectl apply -f  deployment.yaml
+kubectl create deployment -h
+kubectl create deployment wwww --image=nginx:1.16 --replicas=5 --dry-run=client -o yaml > xxx.yaml 
+kubectl create deployment hr-web-app --image=kodecloud/webapp-color --replicas=5 
+
+kubectl  edit deployment blue
+
+modifier l'image de deployment:
+kubectl set image deploy/vote vote(container)=instavote/vote:movies --record (garder la trace de la commande dans l'historique)
+
+kubectl  get deployments
+kubectl  get deploy,rs,pod
+
+
+kubectl describe deployment lab-deployment(name of deployment, check replica, image, events) 
+
+
+historique des màj des deployment:
+kubectl  rollout history deploy/vote
+kubectl  rollout history lab-deployment --revision 1
+kubectl  rollout history lab-deployment --revision 2
+
+rollback:
+kubectl  rollout undo deploy/vote
+kubectl  rollout undo deploy/vote --to-revision=1
+
+forcer la recreation de l'ensemble des pods d'un deployment:
+kubectl  rollout restart deploy/vote
+
+scale:
+kubectl scale deployment nginx-deploymentdeployments --replicas=10 (10 pods)
+
+kubectl autoscale deploy www --min=2 --max=10 --cpu-percecnt=50 (faire évoluer le nb pod en fonction du cpu)
+
+
+
+
+configmap & env
+---------------
+kubectl create configmap --help
+kubectl create configmap dev-config --from-literal=app.mem=2048m
+kubectl create configmap nginx-config --from-file=./nginx.conf -n finance
+kubectl create configmap app-config-env --from-env-file=./napp.env
+
+kubectl  get configmap
+kubectl  get cm nginx-config
+kubectl  get cm nginx-config -o yaml
+
+
+kubectl  create -f config-map.yaml
+
+
+kubectl  describe cm db-config
+
+docker run -e APP_COLOR=pink simple
+
+env:
+ - name: APP_COLOR
+   value: pink
+ - name: APP_MODE
+   value: prod
+
+envFrom:
+ - configMapRef: 
+   name : app-config
+
+
+configmap app-config:
+APP_COLOR : pink
+APP_MODE: prod
+
+Secret
+---------
+types: generic , tls, docker-registry
+
+kubectl create secret --help
+kubectl create secret generic secondsecret --from-literal=dbpass=passs123 --from-literal=dbuser=root
+kubectl create secret generic secondsecret --from-file=./credential.txt
+
+kubectl  get secrets
+kubectl  get secret -o yaml
+kubectl  get secret secondsecret  -o yaml (read a secret)
+
+kubectl describe secret firstsecret
+
+kubectl apply -k ./
+
+kubectl apply -f  secret.yaml
+
+echo hunkhxws | base64 -d
+echo -n 'admin' | base64 
+echo -n 'pass123' | base64 
+
+
+daemonset
+---------
+kubectl apply -f  daemonset.yaml
+kubectl get daemonset
+kubectl get ds
+kubectl describe daemonset yyy-daemonset
+kubectl describe ds yyy-daemonset
+
+Volume:
+--------
+kubectl get pvc
+kubectl get pv
+kubectl get sc
+kubectl apply -f pvc.yaml
+kubectl delete -f pvc.yaml
+kubectl delete -f pv.yaml
+kubectl edit pv pv-name
+kubectl edit pvc pvc-name --record
+
+
+
+
+
+
+Ingress
+--------
+utiliser un seul load balancer qui va rediriger le traffic sur vers tous les services
+Ingress ressource
+Ingress controllers
+
+ingress Rules:
+domain1.com -> service1
+domain2.com -> service2
+
+kubectl  get ingress -n critical-space
+kubectl describe ingress hello-ingress
+
+kubectl create ingress ingress-pay -n critical-space --rule="/pay=pay-service:8282" --rule="/wear=wear-service:8080"
+
+
+Scheduling:
+------------
+séletion d'un Node sur lequel le Pod sera déployé
+effectué par le composant kube-scheduling
+
+versoin:
+--------
+cat /etc/*-release
+
+
+static pod
+----------
+le repertoire ou se trouvent les specifications des pods static : /etc/kubernates/manifests/
+
+pods name end with node name
+owner of this pod is Node and not the Replicaset
+
+
+k run nginx-static --image=nginx --restart=Always --dry-run=client -o yaml 
+cat > /etc/kubernates/manifests/nginx-static.yaml , ensuite coller le resultat d'un dry-run 
+
+
+kubelet conf : 
+cat /var/lib/kubelet/config.yaml > the path to check the static pod directory
+
+root@controlplane:~# scp static.yaml node01:/root/
+
+
+JSONPATH
+-----------
+kubectl get pods -o jsonpath='{.spec.containers[0].image}'
+kubectl get po/www -o jsonpath='{.spec.containers[0].image}'
+kubectl get nodes -o jsonpath='{.items[*].metadata.labels.version}'
+kubectl get nodes -o jsonpath='{.items[*].status.nodeInfo.osImage}' > xxx.txt
+kubectl get nodes -o jsonpath='{.items[*].status.addresses[?@.type=InternalIP].address}' > xxx.txt
+
+
+Custum columns
+--------------
+kubectl get po/www -o custum-colomns='NAME:metadata.name,IMAGES:spec.containers[*].image, '
+
+
+Autocompletion
+--------------
+sudo apt-get install bash-completion
+source < (kubectl completion bash )
+
+Resources
+---------
+kubectl api-resources
+
+Document des resources
+----------------------
+kubectl explain pod.spec.containers.command
+
+Metric Pod et node
+------------------
+kubectl top pods --all-namespaces
+kubectl top nodes
+
+
+
+troubleshouting
+----------------
+systemctl status kubelet
+systemctl start kubelet
+systemctl enable kubelet
+
+service kube-apiserver status
+service kubelet status/start
+service kube-proxy status
+
+systemctl daemon-reload
+
+verify cluster component: 
+kubectl get componentstatus
+
+verify cluster infos : 
+kubectl  cluster-info
+
+check logs of individual components: 
+journalctl -l kube-apiserver
+journalctl -u kube-apiserver
+journalctl -u kubelet
+
+kubectl  drain worker01
+kubectl  drain node1 --ignore-daemondsets --delete-local-data
+kubectl  uncordon worker01
+
+les fichiers kubeconfig se trouvent 
+/etc/kubernates/
+
+kubeconfig file used by kubelet
+/etc/kubernates/kubelet.conf
+
+kubelet service take options from
+/var/lib/kubelet/config.yaml
+
+
+check memory and disk space
+top
+df -h
+
+check certificates
+openssl x509 -in /var/lib/kubelet/worker-1.crt -txt
+
+curl http://web-service:node-port
+
+k logs web -f
+k logs web -f --previous
+
+Ressource limits
+------------------
+requests: 
+ memory:"6400Mi"
+ limit:"0.5"
+limits:
+ memory:"12800Mi"
+ limit:"1"
+
+
+Service Account
+---------------
+type of users:
+Normal users
+Services Accounts
+
+when a service account is created it also create a token(secret object)
+every service account is asociate with a secret
+for every namespace a service account named default is automatcally created. this default sa and it token is mounted to each new created pod as a volume mount
+
+ls /run/secret/kubernates.io/serviceaccount
+
+kubectl create serviceaccount svc-account
+kubectl create serviceaccount dashboard-sa
+kubectl get serviceaccount
+kubectl get sa
+kubectl describe serviceaccount  dashboard-sa
+
+to use a specific service account, add field:
+serviceAccountNames : dashboard-sa
+
+
+
+kubectl run pod-1 --image=nginx --serviceaccount=svc-account
+
+a partir v 1.24
+kubectl create token dashboard-sa
+
+
+
+
+Named Ports
+-----------------
+kubectl  expose pod nginx--name=nginx-service --port=80 --target-port=http
+
+
+
+LOGS & EVENTS
+--------
+
+
+kubectl get events
+kubectl get events -n default
+kubectl get events -n kube-system
+kubectl get events -o json
+
+kubectl  get pods --all-namespaces --field-selector=metadata.namespace!=default
+kubectl  get pods --all-namespaces --field-selector=metadata.name!=xxxx
+
+évènements associés a un pod
+kubectl  get events --field-selector=involvedObject.name=event-pod
+
+docker logs pod1:
+/var/lib/docker/containers/hyukkko
+
+/var/log/...
+
+docker run -d --name mycustum --log-driver none busybix ping google.com
+j!k
+
+Explain
+-------
+kubectl explain pod
+kubectl explain pod.spec.containers
+kubectl explain replicaset
+
+
+
+
+
+Network policy
+----------------
+
+Ingress
+Egress
+
+kubectl delete netpol xxx
+
+IpBlock
+podSelector
+namespaceSelector
+
+
+Certificat
+------------
+https://kubernetes.io/docs/reference/access-authn-authz/certificate-signing-requests/#certificate-signing-requests
+
+k create -f john-csr.yaml
+k get csr 
+k get csr agent-smith -o yaml
+
+k certificate approve john-developer
+k certificate deny agent-smith
+k certificate delete agent-smith
+
+cat jane.csr | base64 | tr -d "\n"
+echo "=hnjuh"  | base64 --decode 
+
+openssl x509 -in /etc/kubernates/pki/apiserver.crt -txt -noout
+
+Role
+-----
+k create role --help
+k create role developer-role --verb=get,list,watch,update,delete --resources=pods -n developement
+k get roles
+k get role developer-role -n developement
+k describe role  developer-role-n developement
+k edit role  developer-role-n developement
+
+
+kubectl  get pod as dev-user
+kubectl as dev-user get pod dark-blue-app -n blue 
+
+
+Role-binding
+-----
+k create rolebinding --help
+k create rolebinding developer  --role=developer-role --user=john -n developement
+k get rolebinding developer  -n developement
+k describe rolebinding developer  -n developement
+
+this will change after creating a role binding
+k auth --help
+k auth can-i get pods -n developement as john
+k auth can-i create pods -n developement as john
+
+
+ClusterRole
+---------------
+k create clusterrole michelle-role  --verb=get,list,watch --resource=nodes
+k create clusterrole admin-role  --verb=get,list,create,watch --resource=persistentvolumes,storageclasses
+k get clusterrole michelle-role
+k get clusterrole michelle-role -o yaml
+k describe michelle-role
+
+
+ClusterRoleBinding
+--------------------- 
+k create clusterrolebinding developer  --clusterrole=developer --serviceaccount=default:pv-viewer-sa 
+k create clusterrolebinding michelle-role-binding  --clusterrole=michelle-role --user=michelle
+k get clusterrolebinding developer  
+k describe clusterrolebinding developer 
+k get clusterrolebindings | grep cluster-admin
+
+kubectl --as michelle  get nodes
+
+system
+-------
+sudo systemctl daemon-reload
+sudo systemctl restart kubelet
+
+reseaux
+-----------
+ip address
+ip address show eth0
+ip address show type bridge
+ip link
+ip route
+
+netstat --help
+
+
+ETCD BACKUP
+-----------
+export ETCDCTL_API=3
+etcdctl version
+
+https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/#backing-up-an-etcd-cluster
+
+--data-dir=/var/lid/etcd
+
+ETCDCTL_API=3 etcdctl  snapshot save --help
+ETCDCTL_API=3 etcdctl snapshot save snapshot.db
+ETCDCTL_API=3 etcdctl snapshot status snapshot.db
+ETCDCTL_API=3 etcdctl --endpoints $ENDPOINT snapshot save snapshotdb
+
+restore:
+service kube-apiserver stopped
+ETCDCTL_API=3 etcdctl snapshot restore snapshot.db --data-dir=/var/lid/etcd-from-backup
+
+sudo systemctl daemon-reload
+service etcd restart / systemctl restart etcd 
+service kube-apiserver start
+
+/etc/kubernetes/pki/etcd/
+vi /etc/systemd/system/etcd.service
+
+--endpoints=https:127.0.0.1:2379 \
+--cacert=/etc/etcd/ca.crt \
+--cert=/etc/etcd/etcd-server.crt \
+--key=/etc/etcd/etcd-server.key \
+
+etcdctl snapshot save --endpoints=127.0.0.1:2379 \
+--cacert=/etc/kubernetes/pki/etcd/ca.crt \
+--cert=/etc/kubernetes/pki/etcd/server.crt \
+--key=/etc/kubernetes/pki/etcd/server.key \
+/opt/snapshot-pre-boot.db
+
+etcdctl snapshot restore --data-dir=/var/lib/etcd-from-backup /opt/snapshot-pre-boot.db
+
+
+etcdctl  member list
+
+ps -ef | grep -i etcd
+
+scp cluster1-controleplane:/opt/cluster1.db /opt/
+
+troubleshouting
+----------------
+
+worker nodes:
+service kubelet status
+service kubelet start
+systemctl enable kubelet
+journalctl -u kubelet 
+
+repertoires
+------------
+/etc/systemd/system/kube-apiserver.service
+/etc/systemd/system/kube-controller-manager.service
+
+cat /etc/kubernates/manifests/
+
+ps -aux grep | grep kube-apiserver
+
+
+
+kubeadm
+--------
+https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/
+https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/
+
+kubeadm version
+
+run in master node:
+kubeadm init --pod-network-cidr=10.244.0.0./16
+
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+apt-cache madison kubeadm
+sudo apt-get update
+sudo apt-mark unhold kubelet kubeadm kubectl
+sudo apt-get install -y kubelet=1.23.0-00 kubeadm=1.23.0-00 kubectl=1.23.0-00
+sudo apt-mark hold kubelet kubeadm kubectl
+
+upgrade
+----------
+
+kubeadm upgrade plan 
+
+1 uograde kubeadm tool
+2 maj master componnent
+3 maj kubelet
+
+apt-get upgrade -y kubeadm=1.12.0-00
+kubeadm upgrade apply v1.12.0
+
+apt-get upgrade -y kubelet=1.12.0-00
+
+sudo systemctl daemon-reload
+systemctl restart kubelet
+
+on worker
+kubeadm upgrade node config --kubelet-verion 1.12.0
+
+k drain node01 
+
+kubeadm uncordon controleplane 
+kubeadm uncordon node1
+
+cat /etc/*release*
+
+
+kustomize
+---------
+faire du patchin pour l'adapter a son cas d'usage
+permet de mdifier certains chmaps des fichers manifest 
+alternative a helm (langage Go)
+
+kustomize apply -k 
+kustomize build .
+kustomize build . | kubectl apply -f -
+ 

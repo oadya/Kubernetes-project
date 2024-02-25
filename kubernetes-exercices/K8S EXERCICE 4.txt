@@ -1,0 +1,505 @@
+We have created a service account called green-sa-cka22-arch, a cluster role called green-role-cka22-arch and a cluster role binding called green-role-binding-cka22-arch.
+
+
+Update the permissions of this service account so that it can only get all the namespaces in cluster1.
+
+Edit the green-role-cka22-arch to update permissions:
+
+student-node ~ ➜  kubectl edit clusterrole green-role-cka22-arch --context cluster1
+
+
+
+At the end add below code:
+
+- apiGroups:
+  - "*"
+  resources:
+  - namespaces
+  verbs:
+  - get
+
+
+
+You can verify it as below:
+
+student-node ~ ➜  kubectl auth can-i get namespaces --as=system:serviceaccount:default:green-sa-cka22-arch
+yes
+
+
+-------------------------
+
+
+It appears that the black-cka25-trb deployment in cluster1 isn't up to date. While listing the deployments, we are currently seeing 0 under the UP-TO-DATE section for this deployment. Troubleshoot, fix and make sure that this deployment is up to date.
+
+
+Check current status of the deployment
+
+kubectl get deploy 
+Let's check deployment status
+
+kubectl get deploy black-cka25-trb -o yaml
+Under status: you will see message: Deployment is paused so seems like deployment was paused, let check the rollout status
+
+kubectl rollout status deployment black-cka25-trb
+You will see this message
+
+Waiting for deployment "black-cka25-trb" rollout to finish: 0 out of 1 new replicas have been updated...
+So, let's resume
+
+kubectl rollout resume deployment black-cka25-trb
+Check again the status of the deployment
+
+kubectl get deploy 
+It should be good now.
+
+--------------------------------------
+
+
+A new service account called thor-cka24-trb has been created in cluster1. Using this service account, we are trying to list and get the pods and secrets deployed in default namespace. However, this service account is not able to perform these operations.
+
+
+Look into the issue and apply the appropriate fix(es) so that the service account thor-cka24-trb can perform these operations.
+
+
+Check if this service account is associated with any role binding
+
+kubectl get rolebinding -o yaml | grep -B 5 -A 5 thor-cka24-trb
+You will see role-cka24-trb is associated with this SA. So let's edit it to see the permissions
+
+kubectl edit role role-cka24-trb
+Update it so that resourcesand verbs section look as below:
+
+resources:
+- pods
+- secrets
+verbs:
+- list
+- get
+
+
+----------------------------
+
+
+A service account called deploy-cka19-trb is created in cluster1 along with a cluster role called deploy-cka19-trb-role. This role should have the permissions to get all the deployments under the default namespace. However, at the moment, it is not able to.
+
+
+Find out what is wrong and correct it so that the deploy-cka19-trb service account is able to get deployments under default namespace.
+
+
+Let's see if deploy-cka19-trb service account is able to get the deployments.
+kubectl auth can-i get deployments --as=system:serviceaccount:default:deploy-cka19-trb
+We can see its not since we are getting no in the output.
+
+Let's look into the cluster role:
+kubectl get clusterrole deploy-cka19-trb-role -o yaml
+The rules would be fine but we can see that there is no cluster role binding and service account associated with this. So let's create a cluster role binding.
+
+kubectl create clusterrolebinding deploy-cka19-trb-role-binding --clusterrole=deploy-cka19-trb-role --serviceaccount=default:deploy-cka19-trb
+Let's see if deploy-cka19-trb service account is able to get the deployments now.
+
+kubectl auth can-i get deployments --as=system:serviceaccount:default:deploy-cka19-trb
+
+
+-------------------------------
+
+The green-deployment-cka15-trb deployment is having some issues since the corresponding POD is crashing and restarting multiple times continuously.
+
+
+Investigate the issue and fix it, make sure the POD is in running state and its stable (i.e NO RESTARTS!).
+
+
+List the pods to check its status
+kubectl get pod
+its must have crashed already so lets look into the logs.
+
+kubectl logs -f green-deployment-cka15-trb-xxxx
+You will see some logs like these
+
+2022-09-18 17:13:25 98 [Note] InnoDB: Mutexes and rw_locks use GCC atomic builtins
+2022-09-18 17:13:25 98 [Note] InnoDB: Memory barrier is not used
+2022-09-18 17:13:25 98 [Note] InnoDB: Compressed tables use zlib 1.2.11
+2022-09-18 17:13:25 98 [Note] InnoDB: Using Linux native AIO
+2022-09-18 17:13:25 98 [Note] InnoDB: Using CPU crc32 instructions
+2022-09-18 17:13:25 98 [Note] InnoDB: Initializing buffer pool, size = 128.0M
+Killed
+This might be due to the resources issue, especially the memory, so let's try to recreate the POD to see if it helps.
+
+kubectl delete pod green-deployment-cka15-trb-xxxx
+Now watch closely the POD status
+
+kubectl get pod
+Pretty soon you will see the POD status has been changed to OOMKilled which confirms its the memory issue. So let's look into the resources that are assigned to this deployment.
+
+kubectl get deploy
+kubectl edit deploy green-deployment-cka15-trb
+Under resources: -> limits: change memory from 256Mi to 512Mi and save the changes.
+Now watch closely the POD status again
+
+kubectl get pod
+It should be stable now.
+
+
+
+------------------
+
+
+
+We recently deployed a DaemonSet called logs-cka26-trb under kube-system namespace in cluster2 for collecting logs from all the cluster nodes including the controlplane node. However, at this moment, the DaemonSet is not creating any pod on the controlplane node.
+
+
+Troubleshoot the issue and fix it to make sure the pods are getting created on all nodes including the controlplane node.
+
+
+Check the status of DaemonSet
+
+kubectl --context2 cluster2 get ds logs-cka26-trb -n kube-system
+You will find that DESIRED CURRENT READY etc have value 2 which means there are two pods that have been created. You can check the same by listing the PODs
+
+kubectl --context2 cluster2 get pod  -n kube-system
+You can check on which nodes these are created on
+
+kubectl --context2 cluster2 get pod <pod-name> -n kube-system -o wide
+Under NODE you will find the node name, so we can see that its not scheduled on the controlplane node which is because it must be missing the reqiured tolerations. Let's edit the DaemonSet to fix the tolerations
+
+kubectl --context2 cluster2 edit ds logs-cka26-trb -n kube-system
+Under tolerations: add below given tolerations as well
+
+- key: node-role.kubernetes.io/control-plane
+  operator: Exists
+  effect: NoSchedule
+Wait for some time PODs should schedule on all nodes now including the controlplane node.
+
+----------------------
+
+
+
+
+The deployment called trace-wl08 inside the test-wl08 namespace on cluster1 has undergone several, routine, rolling updates and rollbacks.
+
+
+Inspect the revision 2 of this deployment and store the image name that was used in this revision in the /opt/trace-wl08-revision-book.txt file on the student-node.
+
+
+Set the correct context: -
+
+kubectl config use-context cluster1
+
+
+List the deployments in test-wl08 namespace as follows: -
+
+kubectl get deploy -n test-wl08
+
+
+Run the following command to check the revisions of the deployment called trace-wl08:-
+
+kubectl rollout history deployment -n test-wl08 trace-wl08 
+
+
+Inspect the revision 2 by using the --revision option: -
+
+kubectl rollout history deployment -n test-wl08 trace-wl08 --revision=2
+
+
+Under the Containers section, you will see the image name.
+
+On the student-node, save that image name in the given file /opt/trace-wl08-revision-book.txt:
+
+echo "busybox:1.35" > /opt/trace-wl08-revision-book.txt
+
+------------------------
+
+
+For this question, please set the context to cluster1 by running:
+
+
+kubectl config use-context cluster1
+
+
+We want to deploy a python based application on the cluster using a template located at /root/olive-app-cka10-str.yaml on student-node. However, before you proceed we need to make some modifications to the YAML file as per details given below:
+
+
+The YAML should also contain a persistent volume claim with name olive-pvc-cka10-str to claim a 100Mi of storage from olive-pv-cka10-str PV.
+
+
+Update the deployment to add a sidecar container, which can use busybox image (you might need to add a sleep command for this container to keep it running.)
+
+Share the python-data volume with this container and mount the same at path /usr/src. Make sure this container only has read permissions on this volume.
+
+
+Finally, create a pod using this YAML and make sure the POD is in Running state.
+
+
+
+Update olive-app-cka10-str.yaml template so that it looks like as below:
+
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: olive-pvc-cka10-str
+spec:
+  accessModes:
+  - ReadWriteMany
+  storageClassName: olive-stc-cka10-str
+  volumeName: olive-pv-cka10-str
+  resources:
+    requests:
+      storage: 100Mi
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: olive-app-cka10-str
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: olive-app-cka10-str
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                  - cluster1-node01
+      containers:
+      - name: python
+        image: poroko/flask-demo-app
+        ports:
+        - containerPort: 5000
+        volumeMounts:
+        - name: python-data
+          mountPath: /usr/share/
+      - name: busybox
+        image: busybox
+        command:
+          - "bin/sh"
+          - "-c"
+          - "sleep 10000"
+        volumeMounts:
+          - name: python-data
+            mountPath: "/usr/src"
+            readOnly: true
+      volumes:
+      - name: python-data
+        persistentVolumeClaim:
+          claimName: olive-pvc-cka10-str
+  selector:
+    matchLabels:
+      app: olive-app-cka10-str
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: olive-svc-cka10-str
+spec:
+  type: NodePort
+  ports:
+    - port: 5000
+      nodePort: 32006
+  selector:
+    app: olive-app-cka10-str
+Apply the template:
+
+kubectl apply -f olive-app-cka10-str.yaml
+
+
+-------------------------
+
+
+There is a persistent volume named apple-pv-cka04-str. Create a persistent volume claim named apple-pvc-cka04-str and request a 40Mi of storage from apple-pv-cka04-str PV.
+The access mode should be ReadWriteOnce and storage class should be manual.
+
+
+set context to cluster1:
+
+Create a yaml template as below:
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: apple-pvc-cka04-str
+spec:
+  volumeName: apple-pv-cka04-str
+  storageClassName: manual
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 40Mi
+Apply the template:
+kubectl apply -f <template-file-name>.yaml
+
+
+
+
+
+-------------------------
+
+
+
+ohn is setting up a two tier application stack that is supposed to be accessible using the service curlme-cka01-svcn. To test that the service is accessible, he is using a pod called curlpod-cka01-svcn. However, at the moment, he is unable to get any response from the application.
+
+
+
+Troubleshoot and fix this issue so the application stack is accessible.
+
+
+
+While you may delete and recreate the service curlme-cka01-svcn, please do not alter it in anyway.
+
+
+Test if the service curlme-cka01-svcn is accessible from pod curlpod-cka01-svcn or not.
+
+
+kubectl exec curlpod-cka01-svcn -- curl curlme-cka01-svcn
+
+.....
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:--  0:00:10 --:--:--     0
+
+
+We did not get any response. Check if the service is properly configured or not.
+
+
+kubectl describe svc curlme-cka01-svcn ''
+
+....
+Name:              curlme-cka01-svcn
+Namespace:         default
+Labels:            <none>
+Annotations:       <none>
+Selector:          run=curlme-ckaO1-svcn
+Type:              ClusterIP
+IP Family Policy:  SingleStack
+IP Families:       IPv4
+IP:                10.109.45.180
+IPs:               10.109.45.180
+Port:              <unset>  80/TCP
+TargetPort:        80/TCP
+Endpoints:         <none>
+Session Affinity:  None
+Events:            <none>
+
+
+The service has no endpoints configured. As we can delete the resource, let's delete the service and create the service again.
+
+To delete the service, use the command kubectl delete svc curlme-cka01-svcn.
+You can create the service using imperative way or declarative way.
+
+
+Using imperative command:
+kubectl expose pod curlme-cka01-svcn --port=80
+
+
+Using declarative manifest:
+
+
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    run: curlme-cka01-svcn
+  name: curlme-cka01-svcn
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    run: curlme-cka01-svcn
+  type: ClusterIP
+
+
+You can test the connection from curlpod-cka-1-svcn using following.
+
+
+kubectl exec curlpod-cka01-svcn -- curl curlme-cka01-svcn
+
+
+
+------------------------------
+
+
+
+There is a deployment nginx-deployment-cka04-svcn in cluster3 which is exposed using service nginx-service-cka04-svcn.
+
+
+
+Create an ingress resource nginx-ingress-cka04-svcn to load balance the incoming traffic with the following specifications:
+
+
+pathType: Prefix and path: /
+
+Backend Service Name: nginx-service-cka04-svcn
+
+Backend Service Port: 80
+
+ssl-redirect is set to false
+
+
+
+First change the context to "cluster3":
+
+
+
+student-node ~ ➜  kubectl config use-context cluster3
+Switched to context "cluster3".
+
+
+
+Now apply the ingress resource with the given requirements:
+
+
+
+kubectl apply -f - << EOF
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nginx-ingress-cka04-svcn
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nginx-service-cka04-svcn
+            port:
+              number: 80
+EOF
+
+
+
+Check if the ingress resource was successfully created:
+
+
+
+student-node ~ ➜  kubectl get ingress
+NAME                       CLASS    HOSTS   ADDRESS       PORTS   AGE
+nginx-ingress-cka04-svcn   <none>   *       172.25.0.10   80      13s
+
+
+
+As the ingress controller is exposed on cluster3-controlplane using traefik service, we need to ssh to cluster3-controlplane first to check if the ingress resource works properly:
+
+
+
+student-node ~ ➜  ssh cluster3-controlplane
+
+cluster3-controlplane:~# curl -I 172.25.0.11
+HTTP/1.1 200 OK
+...
+
+
+
+

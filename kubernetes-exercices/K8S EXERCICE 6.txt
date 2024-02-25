@@ -1,0 +1,462 @@
+Run a pod called looper-cka16-arch using the busybox image that runs the while loop while true; do echo hello; sleep 10;done. This pod should be created in the default namespace.
+
+Create the pod definition:
+
+student-node ~ ➜  vi looper-cka16-arch.yaml
+
+
+
+##Content should be:
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: looper-cka16-arch
+spec:
+  containers:
+  - name: busybox
+    image: busybox
+    command: ["/bin/sh", "-c", "while true; do echo hello; sleep 10;done"]
+
+
+
+Create the pod:
+
+student-node ~ ➜  kubectl apply -f looper-cka16-arch.yaml --context cluster3
+
+--------------------------
+
+
+There is a sample script located at /root/service-cka25-arch.sh on the student-node.
+Update this script to add a command to filter/display the targetPort only for service service-cka25-arch using jsonpath. The service has been created under the default namespace on cluster1.
+
+
+Update service-cka25-arch.sh script:
+
+student-node ~ ➜ vi service-cka25-arch.sh
+
+
+
+Add below command in it:
+
+kubectl --context cluster1 get service service-cka25-arch -o jsonpath='{.spec.ports[0].targetPort}'
+
+------------------------
+
+
+Create a service account called pink-sa-cka24-arch. Further create a cluster role called pink-role-cka24-arch with full permissions on all resources in the core api group under default namespace in cluster1.
+
+
+Finally create a cluster role binding called pink-role-binding-cka24-arch to bind pink-role-cka24-arch cluster role with pink-sa-cka24-arch service account
+
+
+Create the service account, cluster role and role binding:
+
+student-node ~ ➜ kubectl --context cluster1 create serviceaccount pink-sa-cka24-arch
+student-node ~ ➜ kubectl --context cluster1 create clusterrole pink-role-cka24-arch --resource=* --verb=*
+student-node ~ ➜ kubectl --context cluster1 create clusterrolebinding pink-role-binding-cka24-arch --clusterrole=pink-role-cka24-arch --serviceaccount=default:pink-sa-cka24-arch
+
+-----------------------
+
+We have created a service account called blue-sa-cka21-arch, a cluster role called blue-role-cka21-arch and a cluster role binding called blue-role-binding-cka21-arch.
+
+
+Update the permissions of this service account so that it can get the pods only in default namespace of cluster1.
+
+Edit the blue-role-cka21-arch to update permissions:
+
+student-node ~ ➜  kubectl edit clusterrole blue-role-cka21-arch --context cluster1
+
+
+
+Under rules: -> - apiGroups: replace apps with ""
+
+resources: replace - deployments with - pods and save the changes.
+
+
+You can verify it as below:
+
+student-node ~ ➜  kubectl auth can-i get pods --as=system:serviceaccount:default:blue-sa-cka21-arch
+yes
+
+
+--------------------------
+
+
+The blue-dp-cka09-trb deployment is having 0 out of 1 pods running. Fix the issue to make sure that pod is up and running.
+
+List the pods
+kubectl get pod
+Most probably you see Init:Error or Init:CrashLoopBackOff for the corresponding pod.
+
+Look into the logs
+kubectl logs blue-dp-cka09-trb-xxxx -c init-container
+You will see an error something like
+
+sh: can't open 'echo 'Welcome!'': No such file or directory
+Edit the deployment
+kubectl edit deploy blue-dp-cka09-trb
+Under initContainers: -> - command: add -c to the next line of - sh, so final command should look like this
+   initContainers:
+   - command:
+     - sh
+     - -c
+     - echo 'Welcome!'
+If you will check pod then it must be failing again but with different error this time, let's find that out
+
+kubectl get event --field-selector involvedObject.name=blue-dp-cka09-trb-xxxxx
+You will see an error something like
+
+Warning   Failed      pod/blue-dp-cka09-trb-69dd844f76-rv9z8   Error: failed to create containerd task: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: error during container init: error mounting "/var/lib/kubelet/pods/98182a41-6d6d-406a-a3e2-37c33036acac/volumes/kubernetes.io~configmap/nginx-config" to rootfs at "/etc/nginx/nginx.conf": mount /var/lib/kubelet/pods/98182a41-6d6d-406a-a3e2-37c33036acac/volumes/kubernetes.io~configmap/nginx-config:/etc/nginx/nginx.conf (via /proc/self/fd/6), flags: 0x5001: not a directory: unknown
+Edit the deployment again
+kubectl edit deploy blue-dp-cka09-trb
+Under volumeMounts: -> - mountPath: /etc/nginx/nginx.conf -> name: nginx-config add subPath: nginx.conf and save the changes.
+Finally the pod should be in running state.
+
+-----------------------------
+
+
+The db-deployment-cka05-trb deployment is having 0 out of 1 PODs ready.
+
+
+Figure out the issues and fix the same but make sure that you do not remove any DB related environment variables from the deployment/pod.
+
+
+Find out the name of the DB POD:
+kubectl get pod
+Check the DB POD logs:
+kubectl logs <pod-name>
+You might see something like as below which is not that helpful:
+
+Error from server (BadRequest): container "db" in pod "db-deployment-cka05-trb-7457c469b7-zbvx6" is waiting to start: CreateContainerConfigError
+So let's look into the kubernetes events for this pod:
+
+kubectl get event --field-selector involvedObject.name=<pod-name>
+You will see some errors as below:
+
+Error: couldn't find key db in Secret default/db-cka05-trb
+Now let's look into all secrets:
+
+kubectl get secrets db-root-pass-cka05-trb -o yaml
+kubectl get secrets db-user-pass-cka05-trb -o yaml
+kubectl get secrets db-cka05-trb -o yaml
+Now let's look into the deployment.
+
+Edit the deployment
+kubectl edit deployment db-deployment-cka05-trb -o yaml
+You will notice that some of the keys are different what are reffered in the deployment.
+
+Change some env keys: db to database , db-user to username and db-password to password
+Change a secret reference: db-user-cka05-trb to db-user-pass-cka05-trb
+Finally save the changes.
+
+-----------------------------
+
+
+It appears that the black-cka25-trb deployment in cluster1 isn't up to date. While listing the deployments, we are currently seeing 0 under the UP-TO-DATE section for this deployment.
+ Troubleshoot, fix and make sure that this deployment is up to date.
+
+
+Check current status of the deployment
+
+kubectl get deploy 
+Let's check deployment status
+
+kubectl get deploy black-cka25-trb -o yaml
+Under status: you will see message: Deployment is paused so seems like deployment was paused, let check the rollout status
+
+kubectl rollout status deployment black-cka25-trb
+You will see this message
+
+Waiting for deployment "black-cka25-trb" rollout to finish: 0 out of 1 new replicas have been updated...
+So, let's resume
+
+kubectl rollout resume deployment black-cka25-trb
+Check again the status of the deployment
+
+kubectl get deploy 
+It should be good now.
+
+-----------------------
+
+
+The cat-cka22-trb pod is stuck in Pending state. Look into the issue to fix the same. Make sure that the pod is in running state and its stable (i.e not restarting or crashing).
+
+
+Note: Do not make any changes to the pod (No changes to pod config but you may destory and re-create).
+
+
+Let's check the POD status
+kubectl get pod
+You will see that cat-cka22-trb pod is stuck in Pending state. So let's try to look into the events
+
+kubectl --context cluster2 get event --field-selector involvedObject.name=cat-cka22-trb
+You will see some logs as below
+
+Warning   FailedScheduling   pod/cat-cka22-trb   0/3 nodes are available: 1 node(s) had untolerated taint {node-role.kubernetes.io/master: }, 2 node(s) didn't match Pod's node affinity/selector. preemption: 0/2 nodes are available: 3 Preemption is not helpful for scheduling.
+So seems like this POD is using the node affinity, let's look into the POD to understand the node affinity its using.
+
+kubectl --context cluster2 get pod cat-cka22-trb -o yaml
+Under affinity: you will see its looking for key: node and values: cluster2-node02 so let's verify if node01 has these labels applied.
+
+kubectl --context cluster2 get node cluster2-node01 -o yaml
+Look under labels: and you will not find any such label, so let's add this label to this node.
+
+kubectl label node cluster1-node01 node=cluster2-node01
+Check again the node details
+
+kubectl get node cluster2-node01 -o yaml
+The new label should be there, let's see if POD is scheduled now on this node
+
+kubectl --context cluster2 get pod
+Its is but it must be crashing or restarting, so let's look into the pod logs
+
+kubectl --context cluster2 logs -f cat-cka22-trb
+You will see logs as below:
+
+The HOST variable seems incorrect, it must be set to kodekloud
+Let's look into the POD env variables to see if there is any HOST env variable
+
+kubectl --context cluster2 get pod -o yaml
+Under env: you will see this
+
+env:
+- name: HOST
+  valueFrom:
+    secretKeyRef:
+      key: hostname
+      name: cat-cka22-trb
+So we can see that HOST variable is defined and its value is being retrieved from a secret called "cat-cka22-trb". Let's look into this secret.
+
+kubectl --context cluster2 get secret
+kubectl --context cluster2 get secret cat-cka22-trb -o yaml
+You will find a key/value pair under data:, let's try to decode it to see its value:
+
+echo "<the decoded value you see for hostname" | base64 -d
+ok so the value is set to kodekloude which is incorrect as it should be set to kodekloud. So let's update the secret:
+
+echo "kodekloud" | base64
+kubectl edit secret cat-cka22-trb
+Change requests storage hostname: a29kZWtsb3Vkdg== to hostname: a29kZWtsb3VkCg== (values may vary)
+POD should be good now.
+
+
+-----------------------------
+
+
+For this question, please set the context to cluster3 by running:
+
+
+kubectl config use-context cluster3
+
+
+We have deployed a 2-tier web application on the cluster3 nodes in the canara-wl05 namespace. However, at the moment, the web app pod cannot establish a connection with the MySQL pod successfully.
+
+
+You can check the status of the application from the terminal by running the curl command with the following syntax:
+
+curl http://cluster3-controlplane:NODE-PORT
+
+
+
+
+To make the application work, create a new secret called db-secret-wl05 with the following key values: -
+
+1. DB_Host=mysql-svc-wl05
+2. DB_User=root
+3. DB_Password=password123
+
+
+Next, configure the web application pod to load the new environment variables from the newly created secret.
+
+
+Note: Check the web application again using the curl command, and the status of the application should be success.
+
+
+You can SSH into the cluster3 using ssh cluster3-controlplane command.
+
+
+
+Set the correct context: -
+
+kubectl config use-context cluster3
+List the nodes: -
+
+kubectl get nodes -o wide
+Run the curl command to know the status of the application as follows: -
+
+ssh cluster2-controlplane
+
+curl http://10.17.63.11:31020
+<!doctype html>
+<title>Hello from Flask</title>
+...
+
+    <img src="/static/img/failed.png">
+    <h3> Failed connecting to the MySQL database. </h3>
+
+
+    <h2> Environment Variables: DB_Host=Not Set; DB_Database=Not Set; DB_User=Not Set; DB_Password=Not Set; 2003: Can&#39;t connect to MySQL server on &#39;localhost:3306&#39; (111 Connection refused) </h2>
+
+
+As you can see, the status of the application pod is failed.
+
+
+NOTE: - In your lab, IP addresses could be different.
+
+
+
+Let's create a new secret called db-secret-wl05 as follows: -
+
+kubectl create secret generic db-secret-wl05 -n canara-wl05 --from-literal=DB_Host=mysql-svc-wl05 --from-literal=DB_User=root --from-literal=DB_Password=password123
+After that, configure the newly created secret to the web application pod as follows: -
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: webapp-pod-wl05
+  name: webapp-pod-wl05
+  namespace: canara-wl05
+spec:
+  containers:
+  - image: kodekloud/simple-webapp-mysql
+    name: webapp-pod-wl05
+    envFrom:
+    - secretRef:
+        name: db-secret-wl05
+then use the kubectl replace command: -
+
+kubectl replace -f <FILE-NAME> --force
+
+
+In the end, make use of the curl command to check the status of the application pod. The status of the application should be success.
+
+curl http://10.17.63.11:31020
+
+<!doctype html>
+<title>Hello from Flask</title>
+<body style="background: #39b54b;"></body>
+<div style="color: #e4e4e4;
+    text-align:  center;
+    height: 90px;
+    vertical-align:  middle;">
+
+
+    <img src="/static/img/success.jpg">
+    <h3> Successfully connected to the MySQL database.</h3>
+
+
+--------------------------------
+
+
+There is a requirement to share a volume between two containers that are running within the same pod. Use the following instructions to create the pod and related objects:
+
+
+- Create a pod named grape-pod-cka06-str.
+
+- The main container should use the nginx image and mount a volume called grape-vol-cka06-str at path /var/log/nginx.
+
+- The sidecar container can use busybox image, you might need to add a sleep command to this container to keep it running. Next, mount the same volume called grape-vol-cka06-str at the path /usr/src.
+
+- The volume should be of type emptyDir
+
+
+Set context to cluster.
+
+Create a yaml file as below:
+apiVersion: v1
+kind: Pod
+metadata:
+  name: grape-pod-cka06-str
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+    volumeMounts:
+      - name: grape-vol-cka06-str
+        mountPath: "/var/log/nginx"
+  - name: busybox
+    image: busybox
+    command:
+      - "bin/sh"
+      - "-c"
+      - "sleep 10000"
+    volumeMounts:
+      - name: grape-vol-cka06-str
+        mountPath: "/usr/src"
+  volumes:
+  - name: grape-vol-cka06-str
+    emptyDir: {}
+Apply the template:
+kubectl apply -f <template-file-name>.yaml
+
+-----------------------------------
+
+We have an external webserver running on student-node which is exposed at port 9999. We have created a service called external-webserver-cka03-svcn that can connect to our local webserver from within the kubernetes cluster3 but at the moment it is not working as expected.
+
+
+
+Fix the issue so that other pods within cluster3 can use external-webserver-cka03-svcn service to access the webserver.
+
+
+Let's check if the webserver is working or not:
+
+
+student-node ~ ➜  curl student-node:9999
+...
+<h1>Welcome to nginx!</h1>
+...
+
+
+
+Now we will check if service is correctly defined:
+
+student-node ~ ➜  kubectl describe svc external-webserver-cka03-svcn 
+Name:              external-webserver-cka03-svcn
+Namespace:         default
+.
+.
+Endpoints:         <none> # there are no endpoints for the service
+...
+
+
+
+As we can see there is no endpoints specified for the service, hence we won't be able to get any output. Since we can not destroy any k8s object, let's create the endpoint manually for this service as shown below:
+
+
+student-node ~ ➜  export IP_ADDR=$(ifconfig eth0 | grep inet | awk '{print $2}')
+
+student-node ~ ➜ kubectl --context cluster3 apply -f - <<EOF
+apiVersion: v1
+kind: Endpoints
+metadata:
+  # the name here should match the name of the Service
+  name: external-webserver-cka03-svcn
+subsets:
+  - addresses:
+      - ip: $IP_ADDR
+    ports:
+      - port: 9999
+EOF
+
+
+
+Finally check if the curl test works now:
+
+student-node ~ ➜  kubectl --context cluster3 run --rm  -i test-curl-pod --image=curlimages/curl --restart=Never -- curl -m 2 external-webserver-cka03-svcn
+...
+<title>Welcome to nginx!</title>
+...
+
+
+
+
+
+
+
+
+
+
+

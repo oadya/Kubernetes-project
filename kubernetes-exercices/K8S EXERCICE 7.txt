@@ -1,0 +1,429 @@
+A pod called logger-cka03-arch has been created in the default namespace. Inspect this pod and save ALL INFO and ERROR's to the file /root/logger-cka03-arch-all on the student-node.
+
+Run the command kubectl logs logger-cka03-arch --context cluster3 > /root/logger-cka03-arch-all on the student-node.
+
+Run the command :
+
+student-node ~ ➜ kubectl logs logger-cka03-arch --context cluster3 > /root/logger-cka03-arch-all
+
+student-node ~ ➜  head /root/logger-cka03-arch-all
+INFO: Wed Oct 19 10:38:57 UTC 2022 Logger is running
+ERROR: Wed Oct 19 10:38:57 UTC 2022 Logger encountered errors!
+INFO: Wed Oct 19 10:38:57 UTC 2022 Logger is running
+ERROR: Wed Oct 19 10:38:57 UTC 2022 Logger encountered errors!
+INFO: Wed Oct 19 10:38:57 UTC 2022 Logger is running
+ERROR: Wed Oct 19 10:38:57 UTC 2022 Logger encountered errors!
+INFO: Wed Oct 19 10:38:57 UTC 2022 Logger is running
+ERROR: Wed Oct 19 10:38:57 UTC 2022 Logger encountered errors!
+INFO: Wed Oct 19 10:38:57 UTC 2022 Logger is running
+ERROR: Wed Oct 19 10:38:57 UTC 2022 Logger encountered errors!
+
+student-node ~ ➜  
+
+
+----------------------------
+
+The green-deployment-cka15-trb deployment is having some issues since the corresponding POD is crashing and restarting multiple times continuously.
+
+
+Investigate the issue and fix it, make sure the POD is in running state and its stable (i.e NO RESTARTS!).
+
+List the pods to check its status
+kubectl get pod
+its must have crashed already so lets look into the logs.
+
+kubectl logs -f green-deployment-cka15-trb-xxxx
+You will see some logs like these
+
+2022-09-18 17:13:25 98 [Note] InnoDB: Mutexes and rw_locks use GCC atomic builtins
+2022-09-18 17:13:25 98 [Note] InnoDB: Memory barrier is not used
+2022-09-18 17:13:25 98 [Note] InnoDB: Compressed tables use zlib 1.2.11
+2022-09-18 17:13:25 98 [Note] InnoDB: Using Linux native AIO
+2022-09-18 17:13:25 98 [Note] InnoDB: Using CPU crc32 instructions
+2022-09-18 17:13:25 98 [Note] InnoDB: Initializing buffer pool, size = 128.0M
+Killed
+This might be due to the resources issue, especially the memory, so let's try to recreate the POD to see if it helps.
+
+kubectl delete pod green-deployment-cka15-trb-xxxx
+Now watch closely the POD status
+
+kubectl get pod
+Pretty soon you will see the POD status has been changed to OOMKilled which confirms its the memory issue. So let's look into the resources that are assigned to this deployment.
+
+kubectl get deploy
+kubectl edit deploy green-deployment-cka15-trb
+Under resources: -> limits: change memory from 256Mi to 512Mi and save the changes.
+Now watch closely the POD status again
+
+kubectl get pod
+It should be stable now.
+
+
+----------------------
+
+On cluster3, there is a web application pod running inside the default namespace. This pod which is part of a deployment called webapp-color-wl10 and makes use of an environment 
+variable that can change constantly.
+ Add this environment variable to a configmap and configure the pod in the deployment to make use of this config map.
+
+Use the following specs-
+
+
+1. Create a new configMap called webapp-wl10-config-map with the key and value as - APP_COLOR=red.
+
+2. Update the deployment to make use of the newly created configMap name.
+
+3. Delete and recreate the deployment if necessary.
+
+
+
+Set the correct context: -
+
+kubectl config use-context cluster3
+
+
+Inspect the given pod in the default namespace: -
+
+kubectl get pods -n default
+
+
+Let's create a new configMap in the default namespace as follows:-
+
+kubectl create configmap webapp-wl10-config-map --from-literal=APP_COLOR=red
+
+
+And now configure the newly created configmap to the web application pod's template: -
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: webapp-color-wl10
+  name: webapp-color-wl10
+  namespace: default
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: webapp-color-wl10
+  template:
+    metadata:
+      labels:
+        app: webapp-color-wl10
+    spec:
+      containers:
+      - image: kodekloud/webapp-color
+        name: webapp-color-wl10
+        envFrom:
+        - configMapRef: 
+            name: webapp-wl10-config-map
+
+
+NOTE: - It will terminate the old pods and will recreate the new pods with configMap.
+
+
+
+You can inspect the newly created pod to check the configMap: -
+
+kubectl describe po webapp-color-wl10-d79c6f76c-4gjmz
+
+
+Note: - In your lab, pod name could be different.
+
+---------------------------
+
+
+Create a deployment named hr-web-app-cka08-svcn using the image kodekloud/webapp-color with 2 replicas.
+
+
+
+Expose the hr-web-app-cka08-svcn as service hr-web-app-service-cka08-svcn application on port 30082 on the nodes of the cluster.
+
+The web application listens on port 8080.
+
+Switch to cluster3 :
+
+
+
+kubectl config use-context cluster3
+
+
+
+On student-node, use the command: kubectl create deployment hr-web-app-cka08-svcn --image=kodekloud/webapp-color --replicas=2
+
+
+
+Now we can run the command: kubectl expose deployment hr-web-app-cka08-svcn --type=NodePort --port=8080 --name=hr-web-app-service-cka08-svcn --dry-run=client -o yaml > hr-web-app-service-cka08-svcn.yaml to generate a service definition file.
+
+
+
+
+Now, in generated service definition file add the nodePort field with the given port number under the ports section and create a service.
+
+
+------------------------
+
+We have an external webserver running on student-node which is exposed at port 9999. We have created a service called external-webserver-cka03-svcn that can connect to our 
+local webserver from within the kubernetes cluster3 but at the moment it is not working as expected.
+
+
+
+Fix the issue so that other pods within cluster3 can use external-webserver-cka03-svcn service to access the webserver.
+
+
+Let's check if the webserver is working or not:
+
+
+student-node ~ ➜  curl student-node:9999
+...
+<h1>Welcome to nginx!</h1>
+...
+
+
+
+Now we will check if service is correctly defined:
+
+student-node ~ ➜  kubectl describe svc external-webserver-cka03-svcn 
+Name:              external-webserver-cka03-svcn
+Namespace:         default
+.
+.
+Endpoints:         <none> # there are no endpoints for the service
+...
+
+
+
+As we can see there is no endpoints specified for the service, hence we won't be able to get any output. Since we can not destroy any k8s object, let's create the endpoint manually for 
+this service as shown below:
+
+
+student-node ~ ➜  export IP_ADDR=$(ifconfig eth0 | grep inet | awk '{print $2}')
+
+student-node ~ ➜ kubectl --context cluster3 apply -f - <<EOF
+apiVersion: v1
+kind: Endpoints
+metadata:
+  # the name here should match the name of the Service
+  name: external-webserver-cka03-svcn
+subsets:
+  - addresses:
+      - ip: $IP_ADDR
+    ports:
+      - port: 9999
+EOF
+
+
+
+Finally check if the curl test works now:
+
+student-node ~ ➜  kubectl --context cluster3 run --rm  -i test-curl-pod --image=curlimages/curl --restart=Never -- curl -m 2 external-webserver-cka03-svcn
+...
+<title>Welcome to nginx!</title>
+...
+
+----------------------------------
+
+There is a deployment called nodeapp-dp-cka08-trb created in the default namespace on cluster1. This app is using an ingress resource named nodeapp-ing-cka08-trb.
+
+
+From cluster1-controlplane host we should be able to access this app using the command: curl http://kodekloud-ingress.app. However, it is not working at the moment. 
+Troubleshoot and fix the issue.
+
+
+
+Note: You should be able to ssh into the cluster1-controlplane using ssh cluster1-controlplane command.
+
+
+SSh into cluster1-controlplane
+ssh cluster1-controlplane
+Try to access the app using curl http://kodekloud-ingress.app command. You will see 404 Not Found error.
+
+Look into the ingress to make sure its configued properly.
+
+kubectl get ingress
+kubectl edit ingress nodeapp-ing-cka08-trb
+Under rules: -> host: change example.com to kodekloud-ingress.app
+Under backend: -> service: -> name: Change example-service to nodeapp-svc-cka08-trb
+Change port: -> number: from 80 to 3000
+You should be able to access the app using curl http://kodekloud-ingress.app command now.
+
+--------------------------------
+
+
+The controlplane node called cluster4-controlplane in the cluster4 cluster is planned for a regular maintenance. In preparation for this maintenance work, 
+we need to take backups of this cluster. However, something is broken at the moment!
+
+
+Troubleshoot the issues and take a snapshot of the ETCD database using the etcdctl utility at the location /opt/etcd-boot-cka18-trb.db.
+
+
+Note: Make sure etcd listens at its default port. Also you can SSH to the cluster4-controlplane host using the ssh cluster4-controlplane command from the student-node.
+
+
+SSH into cluster4-controlplane host.
+ssh cluster4-controlplane
+Let's take etcd backup
+
+ETCDCTL_API=3 etcdctl --endpoints=https://[127.0.0.1]:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key snapshot save /opt/etcd-boot-cka18-trb.db
+It might stuck for forever, let's see why that would happen. Try to list the PODs first
+
+kubectl get pod -A
+There might an error like
+
+The connection to the server cluster4-controlplane:6443 was refused - did you specify the right host or port?
+There seems to be some issue with the cluster so let's look into the logs
+
+journalctl -u kubelet -f
+You will see a lot of connect: connection refused erros but that must be because the different cluster components are not able to connect to the api server so try to filter out these logs to look more closly
+
+journalctl -u kubelet -f | grep -v 'connect: connection refused'
+You should see some erros as below
+
+cluster4-controlplane kubelet[2240]: E0923 04:38:15.630925    2240 file.go:187] "Could not process manifest file" err="invalid pod: [spec.containers[0].volumeMounts[1].name: Not found: \"etcd-cert\"]" path="/etc/kubernetes/manifests/etcd.yaml"
+So seems like there is some incorrect volume which etcd is trying to mount, let's look into the etcd manifest.
+
+vi /etc/kubernetes/manifests/etcd.yaml 
+Search for etcd-cert, you will notice that the volume name is etcd-certs but the volume mount is trying to mount etcd-cert volume which is incorrect. 
+Fix the volume mount name and save the changes. Let's restart kubelet service after that.
+
+systemctl restart kubelet
+Wait for few minutes to see if its good now.
+
+kubectl get pod -A
+You should be able to list the PODs now, let's try to take etcd backup now:
+
+ETCDCTL_API=3 etcdctl --endpoints=https://[127.0.0.1]:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key snapshot save /opt/etcd-boot-cka18-trb.db
+It should work now.
+
+-------------------------------
+
+We recently deployed a DaemonSet called logs-cka26-trb under kube-system namespace in cluster2 for collecting logs from all the cluster nodes including the controlplane node. 
+However, at this moment, the DaemonSet is not creating any pod on the controlplane node.
+
+
+Troubleshoot the issue and fix it to make sure the pods are getting created on all nodes including the controlplane node.
+
+
+Check the status of DaemonSet
+
+kubectl --context2 cluster2 get ds logs-cka26-trb -n kube-system
+You will find that DESIRED CURRENT READY etc have value 2 which means there are two pods that have been created. You can check the same by listing the PODs
+
+kubectl --context2 cluster2 get pod  -n kube-system
+You can check on which nodes these are created on
+
+kubectl --context2 cluster2 get pod <pod-name> -n kube-system -o wide
+Under NODE you will find the node name, so we can see that its not scheduled on the controlplane node which is because it must be missing the reqiured tolerations. Let's edit the DaemonSet to fix the tolerations
+
+kubectl --context2 cluster2 edit ds logs-cka26-trb -n kube-system
+Under tolerations: add below given tolerations as well
+
+- key: node-role.kubernetes.io/control-plane
+  operator: Exists
+  effect: NoSchedule
+Wait for some time PODs should schedule on all nodes now including the controlplane node.
+
+
+-----------------------------
+
+
+Create a new deployment called ocean-tv-wl09 in the default namespace using the image kodekloud/webapp-color:v1.
+Use the following specs for the deployment:
+
+
+1. Replica count should be 3.
+
+2. Set the Max Unavailable to 40% and Max Surge to 55%.
+
+3. Create the deployment and ensure all the pods are ready.
+
+4. After successful deployment, upgrade the deployment image to kodekloud/webapp-color:v2 and inspect the deployment rollout status.
+
+5. Check the rolling history of the deployment and on the student-node, save the current revision count number to the /opt/revision-count.txt file.
+
+6. Finally, perform a rollback and revert back the deployment image to the older version.
+
+
+
+Set the correct context: -
+
+kubectl config use-context cluster1
+
+
+Use the following template to create a deployment called ocean-tv-wl09: -
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: ocean-tv-wl09
+  name: ocean-tv-wl09
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ocean-tv-wl09
+  strategy: 
+   type: RollingUpdate
+   rollingUpdate:
+     maxUnavailable: 40%
+     maxSurge: 55%
+  template:
+    metadata:
+      labels:
+        app: ocean-tv-wl09
+    spec:
+      containers:
+      - image: kodekloud/webapp-color:v1
+        name: webapp-color
+
+
+Now, create the deployment by using the kubectl create -f command in the default namespace: -
+
+kubectl create -f <FILE-NAME>.yaml
+
+
+After sometime, upgrade the deployment image to kodekloud/webapp-color:v2: -
+
+kubectl set image deploy ocean-tv-wl09 webapp-color=kodekloud/webapp-color:v2
+
+
+And check out the rollout history of the deployment ocean-tv-wl09: -
+
+kubectl rollout history deploy ocean-tv-wl09
+deployment.apps/ocean-tv-wl09 
+REVISION  CHANGE-CAUSE
+1         <none>
+2         <none>
+
+
+NOTE: - Revision count is 2. In your lab, it could be different.
+
+
+
+On the student-node, store the revision count to the given file: -
+
+echo "2" > /opt/revision-count.txt
+
+
+In final task, rollback the deployment image to an old version: -
+
+kubectl rollout undo deployment ocean-tv-wl09
+
+
+Verify the image name by using the following command: -
+
+kubectl describe deploy ocean-tv-wl09
+
+
+It should be kodekloud/webapp-color:v1 image.
+
+
+------------------------
+
+
+
+
+
+

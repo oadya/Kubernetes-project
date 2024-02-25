@@ -1,0 +1,845 @@
+There is a sample script located at /root/service-cka25-arch.sh on the student-node.
+Update this script to add a command to filter/display the targetPort only for service service-cka25-arch using jsonpath. The service has been created under the default namespace on cluster1.
+
+Update service-cka25-arch.sh script:
+
+student-node ~ ➜ vi service-cka25-arch.sh
+
+
+
+Add below command in it:
+
+kubectl --context cluster1 get service service-cka25-arch -o jsonpath='{.spec.ports[0].targetPort}'
+
+-------------------------
+
+For this question, please set the context to cluster1 by running:
+
+
+kubectl config use-context cluster1
+
+
+An etcd backup is already stored at the path /opt/cluster1_backup_to_restore.db on the cluster1-controlplane node. Use /root/default.etcd as the --data-dir and restore it on the cluster1-controlplane node itself.
+
+
+You can ssh to the controlplane node by running ssh root@cluster1-controlplane from the student-node.
+
+
+
+Install etcd utility (if not installed already) and restore the backup:
+
+cluster1-controlplane ~ ➜ cd /tmp
+cluster1-controlplane ~ ➜ export RELEASE=$(curl -s https://api.github.com/repos/etcd-io/etcd/releases/latest | grep tag_name | cut -d '"' -f 4)
+cluster1-controlplane ~ ➜ wget https://github.com/etcd-io/etcd/releases/download/${RELEASE}/etcd-${RELEASE}-linux-amd64.tar.gz
+cluster1-controlplane ~ ➜ tar xvf etcd-${RELEASE}-linux-amd64.tar.gz ; cd etcd-${RELEASE}-linux-amd64
+cluster1-controlplane ~ ➜ mv etcd etcdctl  /usr/local/bin/
+cluster1-controlplane ~ ➜ etcdctl snapshot restore --data-dir /root/default.etcd /opt/cluster1_backup_to_restore.db 
+
+------------------------
+
+A pod called check-time-cka03-trb is continuously crashing. Figure out what is causing this and fix it.
+
+
+
+
+Make sure that the check-time-cka03-trb POD is in running state.
+
+This pod prints the current date and time at a pre-defined frequency and saves it to a file. Ensure that it continues this operation once you have fixed it.
+
+
+
+Look into the POD logs
+kubectl logs -f check-time-cka03-trb
+You may not see any logs so look into the kubernetes events for check-time-cka03-trb POD
+
+Look into the POD events
+kubectl get event --field-selector involvedObject.name=check-time-cka03-trb
+You will see an error something like:
+
+Error: failed to create containerd task: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: exec: "/bin/bash": stat /bin/bash: no such file or directory: unknown
+From the error we can see that its not able to execute /bin/bash so let's try /bin/sh
+
+Edit the pod
+kubectl get pod check-time-cka03-trb -o=yaml > check-time-cka03-trb.yaml
+Make the required changes in check-time-cka03-trb.yaml template
+vi check-time-cka03-trb.yaml
+Under spec: -> containers: -> command: change /bin/bash to /bin/sh and save the file.
+Delete the old pod.
+kubectl delete pod check-time-cka03-trb
+Apply the updated template
+kubectl apply -f check-time-cka03-trb.yaml
+
+--------------------------
+
+
+We recently deployed a DaemonSet called logs-cka26-trb under kube-system namespace in cluster2 for collecting logs from all the cluster nodes including the controlplane node. However, at this moment, the DaemonSet is not creating any pod on the controlplane node.
+
+
+Troubleshoot the issue and fix it to make sure the pods are getting created on all nodes including the controlplane node.
+
+Check the status of DaemonSet
+
+kubectl --context2 cluster2 get ds logs-cka26-trb -n kube-system
+You will find that DESIRED CURRENT READY etc have value 2 which means there are two pods that have been created. You can check the same by listing the PODs
+
+kubectl --context2 cluster2 get pod  -n kube-system
+You can check on which nodes these are created on
+
+kubectl --context2 cluster2 get pod <pod-name> -n kube-system -o wide
+Under NODE you will find the node name, so we can see that its not scheduled on the controlplane node which is because it must be missing the reqiured tolerations. Let's edit the DaemonSet to fix the tolerations
+
+kubectl --context2 cluster2 edit ds logs-cka26-trb -n kube-system
+Under tolerations: add below given tolerations as well
+
+- key: node-role.kubernetes.io/control-plane
+  operator: Exists
+  effect: NoSchedule
+Wait for some time PODs should schedule on all nodes now including the controlplane node.
+
+--------------------------
+
+
+John is setting up a two tier application stack that is supposed to be accessible using the service curlme-cka01-svcn. To test that the service is accessible, he is using a pod called curlpod-cka01-svcn. However, at the moment, he is unable to get any response from the application.
+
+
+
+Troubleshoot and fix this issue so the application stack is accessible.
+
+
+
+While you may delete and recreate the service curlme-cka01-svcn, please do not alter it in anyway.
+
+
+
+Test if the service curlme-cka01-svcn is accessible from pod curlpod-cka01-svcn or not.
+
+
+kubectl exec curlpod-cka01-svcn -- curl curlme-cka01-svcn
+
+.....
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:--  0:00:10 --:--:--     0
+
+
+We did not get any response. Check if the service is properly configured or not.
+
+
+kubectl describe svc curlme-cka01-svcn ''
+
+....
+Name:              curlme-cka01-svcn
+Namespace:         default
+Labels:            <none>
+Annotations:       <none>
+Selector:          run=curlme-ckaO1-svcn
+Type:              ClusterIP
+IP Family Policy:  SingleStack
+IP Families:       IPv4
+IP:                10.109.45.180
+IPs:               10.109.45.180
+Port:              <unset>  80/TCP
+TargetPort:        80/TCP
+Endpoints:         <none>
+Session Affinity:  None
+Events:            <none>
+
+
+The service has no endpoints configured. As we can delete the resource, let's delete the service and create the service again.
+
+To delete the service, use the command kubectl delete svc curlme-cka01-svcn.
+You can create the service using imperative way or declarative way.
+
+
+Using imperative command:
+kubectl expose pod curlme-cka01-svcn --port=80
+
+
+Using declarative manifest:
+
+
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    run: curlme-cka01-svcn
+  name: curlme-cka01-svcn
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    run: curlme-cka01-svcn
+  type: ClusterIP
+
+
+You can test the connection from curlpod-cka-1-svcn using following.
+
+
+kubectl exec curlpod-cka01-svcn -- curl curlme-cka01-svcn
+
+
+------------------------------
+
+
+A pod called logger-cka03-arch has been created in the default namespace. Inspect this pod and save ALL INFO and ERROR's to the file /root/logger-cka03-arch-all on the student-node.
+
+Run the command kubectl logs logger-cka03-arch --context cluster3 > /root/logger-cka03-arch-all on the student-node.
+
+Run the command :
+
+student-node ~ ➜ kubectl logs logger-cka03-arch --context cluster3 > /root/logger-cka03-arch-all
+
+student-node ~ ➜  head /root/logger-cka03-arch-all
+INFO: Wed Oct 19 10:38:57 UTC 2022 Logger is running
+ERROR: Wed Oct 19 10:38:57 UTC 2022 Logger encountered errors!
+INFO: Wed Oct 19 10:38:57 UTC 2022 Logger is running
+ERROR: Wed Oct 19 10:38:57 UTC 2022 Logger encountered errors!
+INFO: Wed Oct 19 10:38:57 UTC 2022 Logger is running
+ERROR: Wed Oct 19 10:38:57 UTC 2022 Logger encountered errors!
+INFO: Wed Oct 19 10:38:57 UTC 2022 Logger is running
+ERROR: Wed Oct 19 10:38:57 UTC 2022 Logger encountered errors!
+INFO: Wed Oct 19 10:38:57 UTC 2022 Logger is running
+ERROR: Wed Oct 19 10:38:57 UTC 2022 Logger encountered errors!
+
+student-node ~ ➜  
+
+
+------------------------------
+
+
+Create a service account called deploy-cka20-arch. Further create a cluster role called deploy-role-cka20-arch with permissions to get the deployments in cluster1.
+
+
+Finally create a cluster role binding called deploy-role-binding-cka20-arch to bind deploy-role-cka20-arch cluster role with deploy-cka20-arch service account.
+
+
+Create the service account, cluster role and role binding:
+
+student-node ~ ➜  kubectl --context cluster1 create serviceaccount deploy-cka20-arch
+student-node ~ ➜  kubectl --context cluster1 create clusterrole deploy-role-cka20-arch --resource=deployments --verb=get
+student-node ~ ➜  kubectl --context cluster1 create clusterrolebinding deploy-role-binding-cka20-arch --clusterrole=deploy-role-cka20-arch --serviceaccount=default:deploy-cka20-arch
+
+
+
+You can verify it as below:
+
+student-node ~ ➜  kubectl --context cluster1 auth can-i get deployments --as=system:serviceaccount:default:deploy-cka20-arch
+yes
+
+------------------------------
+
+Update pod-cka26-arch.sh script:
+
+student-node ~ ➜ vi pod-cka26-arch.sh
+
+
+
+Add below command in it:
+
+kubectl --context cluster1 get pod -n kube-system kube-apiserver-cluster1-controlplane  -o jsonpath='{.metadata.labels.component}'
+
+--------------------------------
+
+
+There is a deployment called nodeapp-dp-cka08-trb created in the default namespace on cluster1. This app is using an ingress resource named nodeapp-ing-cka08-trb.
+
+
+From cluster1-controlplane host we should be able to access this app using the command: curl http://kodekloud-ingress.app. However, it is not working at the moment. Troubleshoot and fix the issue.
+
+
+
+Note: You should be able to ssh into the cluster1-controlplane using ssh cluster1-controlplane command.
+
+
+SSh into cluster1-controlplane
+ssh cluster1-controlplane
+Try to access the app using curl http://kodekloud-ingress.app command. You will see 404 Not Found error.
+
+Look into the ingress to make sure its configued properly.
+
+kubectl get ingress
+kubectl edit ingress nodeapp-ing-cka08-trb
+Under rules: -> host: change example.com to kodekloud-ingress.app
+Under backend: -> service: -> name: Change example-service to nodeapp-svc-cka08-trb
+Change port: -> number: from 80 to 3000
+You should be able to access the app using curl http://kodekloud-ingress.app command now.
+
+
+-------------------------
+
+There is a pod called pink-pod-cka16-trb created in the default namespace in cluster4. This app runs on port tcp/5000 and it is exposed to end-users using an ingress resource called pink-ing-cka16-trb in such a way that it is supposed to be accessible using the command: curl http://kodekloud-pink.app on cluster4-controlplane host.
+
+
+However, this is not working. Troubleshoot and fix this issue, making any necessary to the objects.
+
+
+
+Note: You should be able to ssh into the cluster4-controlplane using ssh cluster4-controlplane command.
+
+
+SSH into the cluster4-controlplane host and try to access the app.
+ssh cluster4-controlplane
+curl kodekloud-pink.app
+You must be getting 503 Service Temporarily Unavailabl error.
+Let's look into the service:
+
+kubectl edit svc pink-svc-cka16-trb
+Under ports: change protocol: UDP to protocol: TCP
+Try to access the app again
+
+curl kodekloud-pink.app
+You must be getting curl: (6) Could not resolve host: example.com error, from the error we can see that its not able to resolve example.com host which indicated that it can be some issue related to the DNS. As we know CoreDNS is a DNS server that can serve as the Kubernetes cluster DNS, so it can be something related to CoreDNS.
+
+Let's check if we have CoreDNS deployment running:
+
+kubectl get deploy -n kube-system
+You will see that for coredns all relicas are down, you will see 0/0 ready pods. So let's scale up this deployment.
+
+kubectl scale --replicas=2 deployment coredns -n kube-system
+Once CoreDBS is up let's try to access to app again.
+
+curl kodekloud-pink.app
+
+-------------------------------
+
+We recently deployed a DaemonSet called logs-cka26-trb under kube-system namespace in cluster2 for collecting logs from all the cluster nodes including the controlplane node. However, at this moment, the DaemonSet is not creating any pod on the controlplane node.
+
+
+Troubleshoot the issue and fix it to make sure the pods are getting created on all nodes including the controlplane node.
+
+Check the status of DaemonSet
+
+kubectl --context2 cluster2 get ds logs-cka26-trb -n kube-system
+You will find that DESIRED CURRENT READY etc have value 2 which means there are two pods that have been created. You can check the same by listing the PODs
+
+kubectl --context2 cluster2 get pod  -n kube-system
+You can check on which nodes these are created on
+
+kubectl --context2 cluster2 get pod <pod-name> -n kube-system -o wide
+Under NODE you will find the node name, so we can see that its not scheduled on the controlplane node which is because it must be missing the reqiured tolerations. Let's edit the DaemonSet to fix the tolerations
+
+kubectl --context2 cluster2 edit ds logs-cka26-trb -n kube-system
+Under tolerations: add below given tolerations as well
+
+- key: node-role.kubernetes.io/control-plane
+  operator: Exists
+  effect: NoSchedule
+Wait for some time PODs should schedule on all nodes now including the controlplane node.
+
+--------------------------------
+
+
+We have deployed a simple web application called frontend-wl04 on cluster1. This version of the application has some issues from a security point of view and needs to be updated to version 2.
+
+
+Update the image and wait for the application to fully deploy.
+
+
+You can verify the running application using the curl command on the terminal:
+
+student-node ~ ➜  curl http://cluster1-node01:30080
+<!doctype html>
+<title>Hello from Flask</title>
+<body style="background: #2980b9;"></body>
+<div style="color: #e4e4e4;
+    text-align:  center;
+    height: 90px;
+    vertical-align:  middle;">
+
+  <h1>Hello from frontend-wl04-84fc69bd96-p7rbl!</h1>
+
+
+
+  <h2>
+    Application Version: v1
+  </h2>
+
+
+</div>
+student-node ~ ➜ 
+
+
+Version 2 Image details as follows:
+
+1. Current version of the image is `v1`, we need to update with the image to kodekloud/webapp-color:v2.
+2. Use the imperative command to update the image.
+
+
+Set the context: -
+
+kubectl config use-context cluster1
+
+
+Now, test the current version of the application as follows:
+
+student-node ~ ➜  curl http://cluster1-node01:30080
+<!doctype html>
+<title>Hello from Flask</title>
+<body style="background: #2980b9;"></body>
+<div style="color: #e4e4e4;
+    text-align:  center;
+    height: 90px;
+    vertical-align:  middle;">
+
+  <h1>Hello from frontend-wl04-84fc69bd96-p7rbl!</h1>
+
+
+
+  <h2>
+    Application Version: v1
+  </h2>
+
+
+</div>
+student-node ~ ➜
+
+
+Let's update the image, First, run the below command to check the existing image: -
+
+kubectl get deploy frontend-wl04 -oyaml | grep -i image 
+
+
+After checking the existing image, we have to use the imperative command (It will take less than a minute) to update the image: -
+
+kubectl set image deploy frontend-wl04 simple-webapp=kodekloud/webapp-color:v2
+
+
+Finally, run the below command to check the updated image: -
+
+kubectl get deploy frontend-wl04 -oyaml | grep -i image 
+
+
+It should be the kodekloud/webapp-color:v2 image and the same should be visible when you run the curl command again:
+
+student-node ~ ➜  curl http://cluster1-node01:30080
+<!doctype html>
+<title>Hello from Flask</title>
+<body style="background: #16a085;"></body>
+<div style="color: #e4e4e4;
+    text-align:  center;
+    height: 90px;
+    vertical-align:  middle;">
+
+  <h1>Hello from frontend-wl04-6c54f479df-5tddd!</h1>
+
+
+
+  <h2>
+    Application Version: v2
+  </h2>
+
+
+</div>
+
+
+-----------------------------
+
+
+One of our Junior DevOps engineers have deployed a pod nginx-wl06 on the cluster3-controlplane node. However, while specifying the resource limits, instead of using Mebibyte as the unit, Gebibyte was used.
+
+As a result, the node doesn't have sufficient resources to deploy this pod and it is stuck in a pending state
+
+Fix the units and re-deploy the pod (Delete and recreate the pod if needed).
+
+
+
+Solution
+Set the correct context: -
+
+kubectl config use-context cluster3
+Run the following command to check the pending pods on all the namespaces: -
+
+kubectl get pods -A
+
+
+After that, inspect the pod Events as follows: -
+
+kubectl get pods -A | grep -i pending
+
+kubectl describe po nginx-wl06
+
+
+Make use of the kubectl edit command to update the values from Gi to Mi:-
+
+kubectl edit po nginx-wl06
+
+
+It will save the temporary file under the /tmp/ directory. Use the kubectl replace command as follows: -
+
+kubectl replace -f /tmp/kubectl-edit-xxxx.yaml --force
+
+
+It will delete the existing pod and will re-create it again with new changes.
+
+------------------------------
+
+
+For this question, please set the context to cluster1 by running:
+
+
+kubectl config use-context cluster1
+
+
+Create a persistent volume called data-pv-cka02-str with the below properties:
+
+
+- Its capacity should be 128Mi.
+
+- The volume type should be hostpath and path should be /opt/data-pv-cka02-str.
+
+
+Next, create a persistent volume claim called data-pvc-cka02-str as per below properties:
+
+
+- Request 50Mi of storage from data-pv-cka02-str PV.
+
+
+Set context to cluster1:
+
+Create a yaml template as below:
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: data-pv-cka02-str
+spec:
+  capacity:
+    storage: 128Mi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /opt/data-pv-cka02-str
+  storageClassName: manual
+
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data-pvc-cka02-str
+spec:
+  storageClassName: manual
+  volumeName: data-pv-cka02-str
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Mi
+Apply the template:
+kubectl apply -f <template-file-name>.yaml
+
+
+---------------------------
+
+
+Create a pod with name tester-cka02-svcn in dev-cka02-svcn namespace with image registry.k8s.io/e2e-test-images/jessie-dnsutils:1.3. Make sure to use command sleep 3600 with restart policy set to Always .
+
+
+Once the tester-cka02-svcn pod is running, store the output of the command nslookup kubernetes.default from tester pod into the file /root/dns_output on student-node.
+
+
+Change to the cluster1 context before attempting the task:
+
+kubectl config use-context cluster1
+
+
+
+Since the "dev-cka02-svcn" namespace doesn't exist, let's create it first:
+
+
+kubectl create ns dev-cka02-svcn
+
+
+
+Create the pod as per the requirements:
+
+
+
+kubectl apply -f - << EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tester-cka02-svcn
+  namespace: dev-cka02-svcn
+spec:
+  containers:
+  - name: tester-cka02-svcn
+    image: registry.k8s.io/e2e-test-images/jessie-dnsutils:1.3
+    command:
+      - sleep
+      - "3600"
+  restartPolicy: Always
+EOF
+
+
+
+Now let's test if the nslookup command is working :
+
+
+student-node ~ ➜  kubectl exec -n dev-cka02-svcn -i -t tester-cka02-svcn -- nslookup kubernetes.default
+;; connection timed out; no servers could be reached
+
+command terminated with exit code 1
+
+
+
+Looks like something is broken at the moment, if we observe the kube-system namespace, we will see no coredns pods are not running which is creating the problem, let's scale them for the nslookup command to work:
+
+
+kubectl scale deployment -n kube-system coredns --replicas=2
+
+
+
+Now let store the correct output into the /root/dns_output on student-node :
+
+
+kubectl exec -n dev-cka02-svcn -i -t tester-cka02-svcn -- nslookup kubernetes.default >> /root/dns_output
+
+
+
+We should have something similar to below output:
+
+
+
+student-node ~ ➜  cat /root/dns_output
+Server:         10.96.0.10
+Address:        10.96.0.10#53
+
+Name:   kubernetes.default.svc.cluster.local
+Address: 10.96.0.1
+
+
+-------------------------------------
+
+For this question, please set the context to cluster3 by running:
+
+
+kubectl config use-context cluster3
+
+
+Create a ReplicaSet with name checker-cka10-svcn in ns-12345-svcn namespace with image registry.k8s.io/e2e-test-images/jessie-dnsutils:1.3.
+
+
+Make sure to specify the below specs as well:
+
+
+command sleep 3600
+replicas set to 2
+container name: dns-image
+
+
+
+Once the checker pods are up and running, store the output of the command nslookup kubernetes.default from any one of the checker pod into the file /root/dns-output-12345-cka10-svcn on student-node.
+
+
+Change to the cluster4 context before attempting the task:
+
+kubectl config use-context cluster3
+
+
+
+Create the ReplicaSet as per the requirements:
+
+
+
+kubectl apply -f - << EOF
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  creationTimestamp: null
+  name: ns-12345-svcn
+spec: {}
+status: {}
+
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: checker-cka10-svcn
+  namespace: ns-12345-svcn
+  labels:
+    app: dns
+    tier: testing
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      tier: testing
+  template:
+    metadata:
+      labels:
+        tier: testing
+    spec:
+      containers:
+      - name: dns-image
+        image: registry.k8s.io/e2e-test-images/jessie-dnsutils:1.3
+        command:
+          - sleep
+          - "3600"
+EOF
+
+
+
+Now let's test if the nslookup command is working :
+
+
+student-node ~ ➜  k get pods -n ns-12345-svcn 
+NAME                       READY   STATUS    RESTARTS   AGE
+checker-cka10-svcn-d2cd2   1/1     Running   0          12s
+checker-cka10-svcn-qj8rc   1/1     Running   0          12s
+
+student-node ~ ➜  POD_NAME=`k get pods -n ns-12345-svcn --no-headers | head -1 | awk '{print $1}'`
+
+student-node ~ ➜  kubectl exec -n ns-12345-svcn -i -t $POD_NAME -- nslookup kubernetes.default
+;; connection timed out; no servers could be reached
+
+command terminated with exit code 1
+
+
+
+There seems to be a problem with the name resolution. Let's check if our coredns pods are up and if any service exists to reach them:
+
+
+
+student-node ~ ➜  k get pods -n kube-system | grep coredns
+coredns-6d4b75cb6d-cprjz                        1/1     Running   0             42m
+coredns-6d4b75cb6d-fdrhv                        1/1     Running   0             42m
+
+student-node ~ ➜  k get svc -n kube-system 
+NAME       TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)                  AGE
+kube-dns   ClusterIP   10.96.0.10   <none>        53/UDP,53/TCP,9153/TCP   62m
+
+
+
+Everything looks okay here but the name resolution problem exists, let's see if the kube-dns service have any active endpoints:
+
+student-node ~ ➜  kubectl get ep -n kube-system kube-dns 
+NAME       ENDPOINTS   AGE
+kube-dns   <none>      63m
+
+
+
+Finally, we have our culprit.
+
+
+If we dig a little deeper, we will it is using wrong labels and selector:
+
+
+
+student-node ~ ➜  kubectl describe svc -n kube-system kube-dns 
+Name:              kube-dns
+Namespace:         kube-system
+....
+Selector:          k8s-app=core-dns
+Type:              ClusterIP
+...
+
+student-node ~ ➜  kubectl get deploy -n kube-system --show-labels | grep coredns
+coredns   2/2     2            2           66m   k8s-app=kube-dns
+
+
+
+Let's update the kube-dns service it to point to correct set of pods:
+
+
+
+student-node ~ ➜  kubectl patch service -n kube-system kube-dns -p '{"spec":{"selector":{"k8s-app": "kube-dns"}}}'
+service/kube-dns patched
+
+student-node ~ ➜  kubectl get ep -n kube-system kube-dns 
+NAME       ENDPOINTS                                              AGE
+kube-dns   10.50.0.2:53,10.50.192.1:53,10.50.0.2:53 + 3 more...   69m
+
+
+
+NOTE: We can use any method to update kube-dns service. In our case, we have used kubectl patch command.
+
+
+
+
+Now let's store the correct output to /root/dns-output-12345-cka10-svcn:
+
+
+
+student-node ~ ➜  kubectl exec -n ns-12345-svcn -i -t $POD_NAME -- nslookup kubernetes.default
+Server:         10.96.0.10
+Address:        10.96.0.10#53
+
+Name:   kubernetes.default.svc.cluster.local
+Address: 10.96.0.1
+
+
+student-node ~ ➜  kubectl exec -n ns-12345-svcn -i -t $POD_NAME -- nslookup kubernetes.default > /root/dns-output-12345-cka10-svcn
+
+
+
+---------------------------
+
+We have an external webserver running on student-node which is exposed at port 9999. We have created a service called external-webserver-cka03-svcn that can connect to our local webserver from within the kubernetes cluster3 but at the moment it is not working as expected.
+
+
+
+Fix the issue so that other pods within cluster3 can use external-webserver-cka03-svcn service to access the webserver.
+
+
+Let's check if the webserver is working or not:
+
+
+student-node ~ ➜  curl student-node:9999
+...
+<h1>Welcome to nginx!</h1>
+...
+
+
+
+Now we will check if service is correctly defined:
+
+student-node ~ ➜  kubectl describe svc external-webserver-cka03-svcn 
+Name:              external-webserver-cka03-svcn
+Namespace:         default
+.
+.
+Endpoints:         <none> # there are no endpoints for the service
+...
+
+
+
+As we can see there is no endpoints specified for the service, hence we won't be able to get any output. Since we can not destroy any k8s object, let's create the endpoint manually for this service as shown below:
+
+
+student-node ~ ➜  export IP_ADDR=$(ifconfig eth0 | grep inet | awk '{print $2}')
+
+student-node ~ ➜ kubectl --context cluster3 apply -f - <<EOF
+apiVersion: v1
+kind: Endpoints
+metadata:
+  # the name here should match the name of the Service
+  name: external-webserver-cka03-svcn
+subsets:
+  - addresses:
+      - ip: $IP_ADDR
+    ports:
+      - port: 9999
+EOF
+
+
+
+Finally check if the curl test works now:
+
+student-node ~ ➜  kubectl --context cluster3 run --rm  -i test-curl-pod --image=curlimages/curl --restart=Never -- curl -m 2 external-webserver-cka03-svcn
+...
+<title>Welcome to nginx!</title>
+...
+
+
+
+
+
+
+
+
+
+
+
