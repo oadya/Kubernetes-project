@@ -910,8 +910,8 @@ cat /etc/*release*
 
 kustomize
 ---------
-faire du patchin pour l'adapter a son cas d'usage
-permet de mdifier certains chmaps des fichers manifest 
+faire du patching pour l'adapter a son cas d'usage
+permet de mdifier certains champs des fichers manifest 
 alternative a helm (langage Go)
 
 kustomize apply -k 

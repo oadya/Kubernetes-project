@@ -1,0 +1,50 @@
+Polaris
+-------
+Outil open source qui va permetre d'asssurer la conformité et gouvernance d'un cluster K8s
+Vérifier la cohérence du cluster kubernates aupres de toutes les équipes
+Tester la conformité des manifests yaml
+Vérifier la sécurité
+
+Remonte les alertes warning ou dangerous(bloquant)
+
+1- Installation de polaris et déploiement du dashboard
+
+https://github.com/FairwindsOps/polaris
+kubectl apply -f https://github.com/fairwindsops/polaris/releases/latest/download/dashboard.yaml
+kubectl -n polaris get po
+kubectl port-forward –namespace polaris svc/polaris-dashboard 8080:80 –address 0.0.0.0
+
+Test deploement avec nginx
+kubectl run nginx –image=nginx
+kubectl port-forward –namespace polaris svc/polaris-dashboard 8080:80 –address 0.0.0.0
+
+2- Utilisation de la CLI polaris pour valider les manifests
+
+yum install -y wget
+wget https://github.com/FairwindsOps/polaris/releases/download/1.2.1/polaris_1.2.1_linux_amd64.tar.gz
+tar -xzvf polaris_1.2.1_linux_amd64.tar.gz
+chmod +x polaris
+mv polaris /usr/bin/
+git clone https://github.com/eazytrainingfr/simple-webapp-docker.git
+cd simple-webapp-docker/kubernetes/
+polaris audit –audit-path .
+polaris audit –audit-path .
+–set-exit-code-on-danger
+–set-exit-code-below-score 90
+https://github.com/FairwindsOps/polaris/blob/master/docs/exit-codes.md
+
+3- Comment créer des exceptions EXEMPTIONS
+
+https://github.com/FairwindsOps/polaris/blob/master/docs/usage.md#exemptions
+kubectl apply -f deployment.yml
+kubectl port-forward –namespace polaris svc/polaris-dashboard 8080:80 –address 0.0.0.0
+kubectl annotate deployment simple-webapp-docker-deployment polaris.fairwinds.com/tagNotSpecified-exempt=true
+kubectl port-forward –namespace polaris svc/polaris-dashboard 8080:80 –address 0.0.0.0
+
+4- Mise en place des webhook
+
+peut empecher la creation d'une ressource en cas d'alerte de type dangerous remontés
+
+https://github.com/FairwindsOps/polaris/blob/master/docs/usage.md#webhook
+kubectl apply -f https://github.com/fairwindsops/polaris/releases/latest/download/webhook.yaml
+kubectl apply -f deployment.yml

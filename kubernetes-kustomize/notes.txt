@@ -1,0 +1,27 @@
+Kustomize
+---------
+
+Permet de surcharger les fichiers manifests source sans les modifiers en modifiant ou rajoutant les éléments 
+
+
+# Installation de la cli kustomize
+curl -s “https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh” | bash
+
+
+Patching:
+--------
+
+Direct patching : modification ou ajout des proprietés sans modifier les fichiers sources
+
+Indirect patching : merger des manifests sources pour appliquer le patching
+
+
+
+commande
+--------
+
+kubectl apply -f deployment.yaml
+
+kustomize build .
+
+kustomize build . | kubectl appy -f -
